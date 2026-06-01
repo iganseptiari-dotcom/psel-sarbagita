@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Peta Lokasi – Proyek PSEL Bali</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1a1a2e}
+  header{background:#1565C0;color:#fff;padding:16px 24px;display:flex;align-items:center;gap:14px}
+  header h1{font-size:18px;font-weight:600}
+  header p{font-size:13px;opacity:.8;margin-top:2px}
+  .badge{background:rgba(255,255,255,.2);border-radius:20px;padding:3px 10px;font-size:12px;white-space:nowrap;margin-left:auto}
+  .layout{display:flex;height:calc(100vh - 66px)}
+  #map{flex:1;min-height:400px}
+  .sidebar{width:340px;background:#fff;border-left:1px solid #e0e0e0;display:flex;flex-direction:column;overflow:hidden}
+  .sidebar-header{padding:14px 16px;border-bottom:1px solid #e8e8e8;background:#fafafa}
+  .sidebar-header h2{font-size:14px;font-weight:600;color:#1565C0;margin-bottom:8px}
+  .filter-row{display:flex;flex-wrap:wrap;gap:6px}
+  .filter-btn{background:#f0f4ff;border:1px solid #c5d5f5;border-radius:20px;padding:4px 10px;font-size:11.5px;cursor:pointer;color:#1565C0;transition:all .15s}
+  .filter-btn.active{background:#1565C0;color:#fff;border-color:#1565C0}
+  .loc-list{overflow-y:auto;flex:1}
+  .loc-item{padding:11px 16px;border-bottom:1px solid #f0f0f0;cursor:pointer;transition:background .12s;display:flex;gap:10px;align-items:flex-start}
+  .loc-item:hover{background:#f0f4ff}
+  .loc-item.active{background:#e8f0fe;border-left:3px solid #1565C0}
+  .loc-dot{width:10px;height:10px;border-radius:50%;margin-top:4px;flex-shrink:0}
+  .loc-name{font-size:13px;font-weight:500;color:#1a1a2e;line-height:1.3}
+  .loc-meta{font-size:11.5px;color:#666;margin-top:2px}
+  .zona-badge{display:inline-block;border-radius:10px;padding:1px 7px;font-size:10.5px;font-weight:600;margin-top:3px}
+  .popup-img{width:100%;height:130px;object-fit:cover;border-radius:6px;margin-bottom:8px;background:#f0f0f0;display:block}
+  .popup-img-placeholder{width:100%;height:100px;border-radius:6px;margin-bottom:8px;background:#f0f4ff;display:flex;align-items:center;justify-content:center;font-size:12px;color:#90a4ae;border:1px dashed #b0bec5}
+  .popup-title{font-size:14px;font-weight:700;color:#1565C0;margin-bottom:6px}
+  .popup-row{font-size:12px;margin:3px 0;color:#333}
+  .popup-row b{color:#1a1a2e}
+  .zona-chip{display:inline-block;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:600;margin-top:4px}
+  .legend{position:absolute;bottom:30px;left:10px;z-index:1000;background:white;border-radius:8px;padding:10px 14px;border:1px solid #ddd;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,.1)}
+  .legend-title{font-weight:600;color:#1565C0;margin-bottom:6px;font-size:12px}
+  .legend-row{display:flex;align-items:center;gap:7px;margin:3px 0}
+  .legend-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+  @media(max-width:700px){.layout{flex-direction:column}.sidebar{width:100%;height:260px;border-left:none;border-top:1px solid #e0e0e0}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Peta Lokasi – Proyek PSEL Bali</h1>
+    <p>Visualisasi 14 titik lokasi beserta jarak dari Proyek PSEL Bali</p>
+  </div>
+  <span class="badge">14 Lokasi</span>
+</header>
+
+<div class="layout">
+  <div id="map"></div>
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>Filter Jarak dari PSEL</h2>
+      <div class="filter-row" id="filters"></div>
+    </div>
+    <div class="loc-list" id="loc-list"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// =====================================================
+// PANDUAN GAMBAR:
+// 1. Buat folder "images" di repo GitHub (di samping index.html)
+// 2. Upload foto dengan nama sesuai kolom "img" di bawah
+// 3. Format yang didukung: .jpg .jpeg .png .webp
+// Contoh struktur repo:
+//   index.html
+//   images/
+//     mangrove-arboretrum-park.jpg
+//     warung-coffee-shop.jpg
+//     ... dst
+// =====================================================
+
+const DATA = [
+  {"name":"Mangrove Arboretrum Park","lat":-8.7266692479389,"lon":115.2153515093673,"dist_m":97.5,"dist_km":0.098,"zona":"Sangat Dekat","category":"Ruang Hijau"},
+  {"name":"Warung dan coffee shop","lat":-8.726700350151575,"lon":115.2141191220635,"dist_m":122.2,"dist_km":0.122,"zona":"Sangat Dekat","category":"Kuliner","img":"images/warung-coffee-shop.jpg"},
+  {"name":"SGi AIR Bali - Exclusive Helicopter Transfer","lat":-8.726145062140107,"lon":115.216098021188,"dist_m":134.3,"dist_km":0.134,"zona":"Sangat Dekat","category":"Transportasi & Akses","img":"images/sgi-air-bali.jpg"},
+  {"name":"Bali Wake Park","lat":-8.7240538,"lon":115.2147231,"dist_m":207.9,"dist_km":0.208,"zona":"Dekat","category":"Lainnya"},
+  {"name":"Warung Makan Be Tuna Sirip Biru","lat":-8.724097098945403,"lon":115.2144127159044,"dist_m":209.1,"dist_km":0.209,"zona":"Dekat","category":"Kuliner","img":"images/warung-be-tuna-sirip-biru.jpg"},
+  {"name":"Bali Marine Park","lat":-8.7237978,"lon":115.2165033,"dist_m":294.3,"dist_km":0.294,"zona":"Dekat","category":"Lainnya"},
+  {"name":"Taman Hutan Raya Ngurah Rai","lat":-8.724569035660956,"lon":115.2179389699499,"dist_m":366.2,"dist_km":0.366,"zona":"Dekat","category":"Ruang Hijau","img":"images/taman-hutan-raya-ngurah-rai.jpg"},
+  {"name":"Indekos","lat":-8.72258302232191,"lon":115.2153109540677,"dist_m":373.3,"dist_km":0.373,"zona":"Dekat","category":"Permukiman & Industri"},
+  {"name":"Wilayah Pemukiman dan Industri","lat":-8.72212774609652,"lon":115.2138734159869,"dist_m":436,"dist_km":0.436,"zona":"Dekat","category":"Permukiman & Industri"},
+  {"name":"TPA Suwung","lat":-8.72213000301201,"lon":115.2212664507202,"dist_m":816.8,"dist_km":0.817,"zona":"Sedang","category":"Proyek & Infrastruktur"},
+  {"name":"Pintu Masuk Tol Simpang Pesanggaran","lat":-8.717549180866458,"lon":115.2150102540597,"dist_m":930.4,"dist_km":0.93,"zona":"Sedang","category":"Transportasi & Akses","img":"images/pintu-tol-simpang-pesanggaran.jpg"},
+  {"name":"Pemukiman Penduduk","lat":-8.716910348774576,"lon":115.215837958183,"dist_m":1006.7,"dist_km":1.007,"zona":"Jauh","category":"Permukiman & Industri"},
+  {"name":"Perumahan","lat":-8.717662233035787,"lon":115.2192536270673,"dist_m":1035.1,"dist_km":1.035,"zona":"Jauh","category":"Permukiman & Industri"}
+];
+
+const PSEL_POLYGON = [
+  [-8.725201999049714,115.2143224526559],
+  [-8.726204168865316,115.214051405762],
+  [-8.726487516010211,115.2154623981574],
+  [-8.726082034240754,115.2156231691743],
+  [-8.725868993331087,115.2164357973937],
+  [-8.724983089011529,115.2167326174878],
+  [-8.724407042363847,115.2166391941662],
+  [-8.724240182739731,115.2164227865812],
+  [-8.724177439062533,115.2157116163916],
+  [-8.724331260238397,115.2155048537146],
+  [-8.724290435917661,115.2148918245971],
+  [-8.72447158656689,115.2146181344634],
+  [-8.725201999049714,115.2143224526559]
+];
+
+const ZONA_COLORS = {
+  "Sangat Dekat":{"color":"#c62828","bg":"#ffebee","text":"#c62828"},
+  "Dekat":{"color":"#e65100","bg":"#fff3e0","text":"#e65100"},
+  "Sedang":{"color":"#f57f17","bg":"#fffde7","text":"#f57f17"},
+  "Jauh":{"color":"#2e7d32","bg":"#e8f5e9","text":"#2e7d32"}
+};
+const ZONA_ORDER = ["Sangat Dekat","Dekat","Sedang","Jauh"];
+
+const map = L.map('map').setView([-8.7225, 115.2155], 15);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+  attribution:'Tiles &copy; Esri &mdash; Source: Esri, USGS, NOAA',
+  maxZoom:19
+}).addTo(map);
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{
+  attribution:'',
+  maxZoom:19,
+  opacity:0.8
+}).addTo(map);
+
+// PSEL Polygon
+L.polygon(PSEL_POLYGON, {
+  color:'#E65100', weight:2,
+  fillColor:'#E65100', fillOpacity:0.15,
+  dashArray:'4,4'
+}).addTo(map)
+.on('mouseover', function(){ this.setStyle({fillOpacity:0.3}); })
+.on('mouseout',  function(){ this.setStyle({fillOpacity:0.15}); })
+.bindPopup(`<div style="min-width:210px">
+  <img src="images/proyek-psel-bali.jpg" class="popup-img" alt="Proyek PSEL Bali"
+    onerror="this.outerHTML='<div class=\\'popup-img-placeholder\\'>Foto belum tersedia</div>'">
+  <div class="popup-title" style="color:#E65100">Proyek PSEL Bali</div>
+  <div class="popup-row">📁 <b>Kategori:</b> Proyek & Infrastruktur</div>
+  <div class="popup-row">📐 <b>Tipe:</b> Area Kawasan</div>
+</div>`, {maxWidth:260});
+
+// Radius circles
+const REF = {lat:-8.725915635272958, lon:115.2148978783646};
+[[200,'#ef5350'],[500,'#ff9800'],[1000,'#fdd835']].forEach(([r,c]) => {
+  L.circle([REF.lat,REF.lon],{radius:r,color:c,weight:1.2,fillColor:c,fillOpacity:0.03,dashArray:'5,6'})
+   .addTo(map).bindTooltip(`Radius ${r}m`,{permanent:false,direction:'top'});
+});
+
+function makeIcon(zona) {
+  const color = ZONA_COLORS[zona]?.color || '#546E7A';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <circle cx="12" cy="12" r="8" fill="${color}" stroke="white" stroke-width="2.5"/>
+  </svg>`;
+  return L.divIcon({html:svg,className:'',iconSize:[24,24],iconAnchor:[12,12],popupAnchor:[0,-14]});
+}
+
+let markers = [];
+let activeFilter = 'Semua';
+
+function buildPopup(d) {
+  const zc = ZONA_COLORS[d.zona] || {bg:'#eee',text:'#333'};
+  const imgHtml = d.img
+    ? `<img src="${d.img}" class="popup-img" alt="${d.name}"
+        onerror="this.outerHTML='<div class=\\'popup-img-placeholder\\'>Foto belum tersedia</div>'">`
+    : `<div class="popup-img-placeholder">Foto belum tersedia</div>`;
+  return `<div style="min-width:210px">
+    ${imgHtml}
+    <div class="popup-title">${d.name}</div>
+    <div class="popup-row">📁 <b>Kategori:</b> ${d.category}</div>
+    <div class="popup-row">📏 <b>Jarak dari PSEL:</b> <b>${d.dist_m.toLocaleString('id-ID')} m</b> (${d.dist_km} km)</div>
+    <div style="margin-top:6px"><span class="zona-chip" style="background:${zc.bg};color:${zc.text}">${d.zona}</span></div>
+  </div>`;
+}
+
+function renderMarkers() {
+  markers.forEach(m => map.removeLayer(m.marker));
+  markers = [];
+  DATA.forEach((d, i) => {
+    if (activeFilter !== 'Semua' && d.zona !== activeFilter) return;
+    const marker = L.marker([d.lat, d.lon], {icon: makeIcon(d.zona)})
+      .addTo(map).bindPopup(buildPopup(d), {maxWidth:260});
+    marker.on('click', () => highlightItem(i));
+    markers.push({marker, idx: i});
+  });
+}
+
+function renderList() {
+  const list = document.getElementById('loc-list');
+  list.innerHTML = '';
+  DATA.forEach((d, i) => {
+    const color = ZONA_COLORS[d.zona]?.color || '#546E7A';
+    const zc = ZONA_COLORS[d.zona] || {bg:'#eee',text:'#333'};
+    const item = document.createElement('div');
+    item.className = 'loc-item';
+    item.id = `item-${i}`;
+    if (activeFilter !== 'Semua' && d.zona !== activeFilter) item.style.display = 'none';
+    item.innerHTML = `
+      <div class="loc-dot" style="background:${color}"></div>
+      <div style="flex:1;min-width:0">
+        <div class="loc-name">${d.name}</div>
+        <div class="loc-meta">${d.category}</div>
+        <div class="loc-meta">${d.dist_m.toLocaleString('id-ID')} m · ${d.dist_km} km</div>
+        <span class="zona-badge" style="background:${zc.bg};color:${zc.text}">${d.zona}</span>
+      </div>`;
+    item.addEventListener('click', () => {
+      map.setView([d.lat, d.lon], 17);
+      const m = markers.find(m => m.idx === i);
+      if (m) m.marker.openPopup();
+      highlightItem(i);
+    });
+    list.appendChild(item);
+  });
+}
+
+function highlightItem(idx) {
+  document.querySelectorAll('.loc-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`item-${idx}`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+}
+
+function buildFilters() {
+  ['Semua',...ZONA_ORDER].forEach(z => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn' + (z === 'Semua' ? ' active' : '');
+    if (z !== 'Semua') { btn.style.borderColor = ZONA_COLORS[z].color; btn.style.color = ZONA_COLORS[z].color; }
+    btn.textContent = z;
+    btn.addEventListener('click', () => {
+      activeFilter = z;
+      document.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.remove('active');
+        const bz = b.textContent;
+        b.style.background = '#f0f4ff';
+        b.style.color = ZONA_COLORS[bz]?.color || '#1565C0';
+      });
+      btn.classList.add('active');
+      btn.style.background = z === 'Semua' ? '#1565C0' : ZONA_COLORS[z].color;
+      btn.style.color = '#fff';
+      renderMarkers();
+      document.querySelectorAll('.loc-item').forEach(el => {
+        const zona = el.querySelector('.zona-badge')?.textContent;
+        el.style.display = (z === 'Semua' || zona === z) ? '' : 'none';
+      });
+    });
+    document.getElementById('filters').appendChild(btn);
+  });
+}
+
+const legendDiv = L.control({position:'bottomleft'});
+legendDiv.onAdd = function() {
+  const d = L.DomUtil.create('div','legend');
+  d.innerHTML = `<div class="legend-title">Jarak dari PSEL</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#c62828"></div> Sangat Dekat (≤200m)</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#e65100"></div> Dekat (201–500m)</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#f57f17"></div> Sedang (501m–1km)</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#2e7d32"></div> Jauh (>1km)</div>
+    <div style="border-top:1px solid #eee;margin:6px 0"></div>
+    <div class="legend-row"><div style="width:22px;height:12px;background:#E65100;opacity:.4;border:1.5px solid #E65100;flex-shrink:0"></div> Area PSEL</div>`;
+  return d;
+};
+legendDiv.addTo(map);
+
+buildFilters();
+renderMarkers();
+renderList();
+</script>
+</body>
+</html>
